@@ -15,14 +15,13 @@ Created on Wed Jun 18 16:55:34 2025
 #Output 2 is colour chart for cross stitch (needs to be big enough that instructions are visible)
 #--------------------------------------------------------------------------------
 import math
-from PIL import ImageEnhance, ImageFilter
-import matplotlib.pyplot as plt
-import tkinter as tk
-from tkinter import filedialog, messagebox
-from PIL import Image, ImageTk
-from sklearn.cluster import KMeans
 import numpy as np
-
+from PIL import Image, ImageTk, ImageEnhance, ImageFilter
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import tkinter as tk
+from tkinter import filedialog, messagebox, ttk
 
 class CrossStitchApp:
     def __init__(self, root):
