@@ -14,16 +14,71 @@ Created on Wed Jun 18 16:55:34 2025
 #Output 1 is scaled vision of what the image will look like with corresponding colours
 #Output 2 is colour chart for cross stitch (needs to be big enough that instructions are visible)
 #--------------------------------------------------------------------------------
+
 import io
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont
-from PIL.Image import Resampling
 from sklearn.cluster import KMeans
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import string
+
+# ---- Compact DMC palette (~60 colors) ----
+DMC_PALETTE = [
+    {"code": "310", "name": "Black", "rgb": (0, 0, 0)},
+    {"code": "321", "name": "Red", "rgb": (199, 43, 59)},
+    {"code": "498", "name": "Dark Red", "rgb": (167, 19, 43)},
+    {"code": "666", "name": "Bright Red", "rgb": (227, 29, 66)},
+    {"code": "699", "name": "Green", "rgb": (0, 91, 0)},
+    {"code": "703", "name": "Chartreuse", "rgb": (123, 181, 71)},
+    {"code": "726", "name": "Topaz Light", "rgb": (255, 241, 148)},
+    {"code": "742", "name": "Tangerine Light", "rgb": (255, 191, 87)},
+    {"code": "743", "name": "Yellow Medium", "rgb": (254, 211, 118)},
+    {"code": "754", "name": "Peach Light", "rgb": (247, 203, 191)},
+    {"code": "796", "name": "Royal Blue Dark", "rgb": (17, 65, 109)},
+    {"code": "798", "name": "Delft Blue Dark", "rgb": (70, 106, 142)},
+    {"code": "799", "name": "Delft Blue Medium", "rgb": (116, 142, 182)},
+    {"code": "820", "name": "Royal Blue Very Dark", "rgb": (14, 54, 92)},
+    {"code": "900", "name": "Burnt Orange Dark", "rgb": (209, 88, 7)},
+    {"code": "906", "name": "Parrot Green Medium", "rgb": (127, 179, 53)},
+    {"code": "907", "name": "Parrot Green Light", "rgb": (199, 230, 102)},
+    {"code": "909", "name": "Emerald Green Very Dark", "rgb": (21, 111, 73)},
+    {"code": "934", "name": "Black Avocado Green", "rgb": (49, 57, 25)},
+    {"code": "938", "name": "Coffee Brown Ultra Dark", "rgb": (54, 31, 14)},
+    {"code": "939", "name": "Navy Blue Very Dark", "rgb": (27, 40, 83)},
+    {"code": "945", "name": "Flesh Medium", "rgb": (247, 191, 169)},
+    {"code": "959", "name": "Sea Green Medium", "rgb": (89, 199, 180)},
+    {"code": "963", "name": "Dusty Rose Ultra Very Light", "rgb": (255, 215, 215)},
+    {"code": "970", "name": "Pumpkin Light", "rgb": (247, 139, 19)},
+    {"code": "995", "name": "Electric Blue Dark", "rgb": (0, 124, 146)},
+    {"code": "3011", "name": "Khaki Green Dark", "rgb": (91, 98, 63)},
+    {"code": "3021", "name": "Brown Gray Very Dark", "rgb": (79, 75, 65)},
+    {"code": "3041", "name": "Antique Violet Medium", "rgb": (149, 111, 124)},
+    {"code": "3072", "name": "Beaver Gray Very Light", "rgb": (230, 232, 232)},
+    {"code": "3340", "name": "Apricot Medium", "rgb": (255, 131, 111)},
+    {"code": "3341", "name": "Apricot", "rgb": (252, 171, 152)},
+    {"code": "3607", "name": "Plum Light", "rgb": (197, 73, 137)},
+    {"code": "3608", "name": "Plum Very Light", "rgb": (234, 156, 196)},
+    {"code": "3685", "name": "Mauve Very Dark", "rgb": (136, 21, 49)},
+    {"code": "3750", "name": "Antique Blue Very Dark", "rgb": (56, 76, 94)},
+    {"code": "3760", "name": "Wedgewood Medium", "rgb": (62, 133, 162)},
+    {"code": "3771", "name": "Terra Cotta Very Light", "rgb": (244, 187, 169)},
+    {"code": "3822", "name": "Straw Light", "rgb": (246, 220, 152)},
+    {"code": "3823", "name": "Yellow Ultra Pale", "rgb": (255, 253, 227)},
+    {"code": "3829", "name": "Old Gold Very Dark", "rgb": (169, 130, 4)},
+    {"code": "3837", "name": "Lavender Ultra Dark", "rgb": (108, 58, 110)},
+    {"code": "3843", "name": "Electric Blue", "rgb": (20, 170, 208)},
+    {"code": "3865", "name": "Winter White", "rgb": (249, 247, 241)},
+    {"code": "5200", "name": "Snow White", "rgb": (255, 255, 255)}
+]
+
+
+def find_nearest_dmc_color(color_rgb):
+    color_array = np.array(color_rgb)
+    distances = [np.linalg.norm(color_array - np.array(dmc["rgb"])) for dmc in DMC_PALETTE]
+    return DMC_PALETTE[np.argmin(distances)]
 
 
 # ---------- Image Processing Functions ----------
@@ -95,6 +150,7 @@ def save_chart_with_legend(quant_img, labels, palette):
     if not save_path:
         return
 
+    # Main chart
     fig, ax = plt.subplots(figsize=(10, 10))
     ax.imshow(quant_img)
     ax.set_xlim(-0.5, w - 0.5)
@@ -114,25 +170,37 @@ def save_chart_with_legend(quant_img, labels, palette):
         for x in range(w):
             label = labels[y, x]
             symbol = symbol_map[label]
-            ax.text(x, y, symbol, fontsize=6, ha='center', va='center', color='black')
+            r, g, b = palette[label]
+            brightness = (0.299 * r + 0.587 * g + 0.114 * b)
+            text_color = 'white' if brightness < 128 else 'black'
+            ax.text(x, y, symbol, fontsize=6, ha='center', va='center', color=text_color)
 
     ax.set_xticks([])
     ax.set_yticks([])
 
-    legend_fig, legend_ax = plt.subplots(figsize=(5, len(palette) * 0.4))
-    legend_ax.axis('off')
-    for i, color in enumerate(palette):
-        symbol = symbol_map[i]
-        patch_color = np.array(color) / 255
-        legend_ax.text(0, i, f"{symbol}", fontsize=10, ha='left', va='center')
-        legend_ax.add_patch(plt.Rectangle((0.2, i - 0.4), 0.4, 0.8, color=patch_color))
-        legend_ax.text(0.7, i, f"RGB: {tuple(color)}", fontsize=8, va='center')
-
     chart_path = save_path
     fig.savefig(chart_path, dpi=300, bbox_inches='tight')
+    plt.close(fig)
+
+    # Legend chart
+    legend_fig, legend_ax = plt.subplots(figsize=(5, len(palette) * 0.4))
+    legend_ax.axis('off')
+
+    for i, color in enumerate(palette):
+        patch_color = np.array(color) / 255
+        symbol = symbol_map[i]
+        dmc = find_nearest_dmc_color(color)
+        y_pos = len(palette) - 1 - i  # flip to have first color at top
+        legend_ax.add_patch(plt.Rectangle((0.05, y_pos - 0.4), 0.3, 0.8, color=patch_color))
+        legend_ax.text(0.4, y_pos, f"{symbol}", fontsize=10, ha='left', va='center')
+        legend_ax.text(0.5, y_pos, f"DMC {dmc['code']} ({dmc['name']})", fontsize=8, ha='left', va='center')
+
+    # Force limits so all colors show
+    legend_ax.set_xlim(0, 1.2)
+    legend_ax.set_ylim(-0.5, len(palette) - 0.5)
+
     legend_path = chart_path.replace(".pdf", "_legend.pdf")
     legend_fig.savefig(legend_path, dpi=300, bbox_inches='tight')
-    plt.close(fig)
     plt.close(legend_fig)
 
 
@@ -144,35 +212,40 @@ class CrossStitchApp:
 
         self.original_image = None
         self.image_path = None
+        self.original_aspect_ratio = None
 
         self.setup_ui()
 
     def setup_ui(self):
-        self.root.geometry("1200x700")
+        self.root.geometry("1200x600")
         self.root.grid_rowconfigure(0, weight=1)
         self.root.grid_columnconfigure(1, weight=1)
 
         control_frame = ttk.Frame(self.root, padding=10)
         control_frame.grid(row=0, column=0, sticky="ns")
 
-        ttk.Button(control_frame, text="Open Image", command=self.load_image).pack(fill="x")
+        ttk.Button(control_frame, text="Open Image", command=self.load_image).pack(pady=10, fill="x")
 
-        ttk.Label(control_frame, text="Fabric Count (threads per inch)").pack()
+        ttk.Label(control_frame, text="Fabric Count (threads per inch)").pack(pady=10)
         self.fabric_entry = ttk.Entry(control_frame)
         self.fabric_entry.insert(0, "14")
         self.fabric_entry.pack(fill="x")
 
-        ttk.Label(control_frame, text="Width (inches)").pack()
+        self.keep_aspect_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(control_frame, text="Maintain Aspect Ratio (only adjust width)",
+                        variable=self.keep_aspect_var).pack(pady=15)
+
+        ttk.Label(control_frame, text="Canvas Width (Inches)").pack(pady=10)
         self.inch_width_entry = ttk.Entry(control_frame)
         self.inch_width_entry.insert(0, "4")
         self.inch_width_entry.pack(fill="x")
 
-        ttk.Label(control_frame, text="Height (inches)").pack()
+        ttk.Label(control_frame, text="Canvas Height (Inches)").pack(pady=10)
         self.inch_height_entry = ttk.Entry(control_frame)
         self.inch_height_entry.insert(0, "4")
         self.inch_height_entry.pack(fill="x")
 
-        ttk.Label(control_frame, text="Number of Colors").pack()
+        ttk.Label(control_frame, text="Number of Colours").pack(pady=10)
         self.color_slider = tk.Scale(control_frame, from_=2, to=30, orient='horizontal')
         self.color_slider.set(10)
         self.color_slider.pack(fill="x")
@@ -183,45 +256,46 @@ class CrossStitchApp:
         self.contrast_slider.pack(fill="x")
 
         self.sharpen_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(control_frame, text="Sharpen Image", variable=self.sharpen_var).pack()
+        ttk.Checkbutton(control_frame, text="Sharpen Image", variable=self.sharpen_var).pack(pady=10)
 
         ttk.Button(control_frame, text="Update Preview", command=self.update_preview).pack(pady=10, fill="x")
         ttk.Button(control_frame, text="Export Chart", command=self.export_chart).pack(pady=10, fill="x")
 
         self.preview_frame = ttk.Frame(self.root)
         self.preview_frame.grid(row=0, column=1, sticky="nsew")
-        self.preview_frame.grid_rowconfigure(1, weight=1)
+        self.preview_frame.grid_rowconfigure(0, weight=1)
         self.preview_frame.grid_columnconfigure(0, weight=1)
+        self.preview_frame.grid_columnconfigure(1, weight=1)
 
         self.original_canvas = None
         self.processed_canvas = None
 
-    def show_image(self, img, title, row, max_display_size=(400, 400)):
-        # Resize image to fit within max_display_size, preserving aspect ratio
-        img_ratio = img.width / img.height
-        max_w, max_h = max_display_size
+    def load_image(self):
+        img, path = open_image()
+        if img:
+            self.original_image = img
+            self.image_path = path
+            self.original_aspect_ratio = img.width / img.height
+            self.show_image(img, title="Original Image", row=0)
+            self.update_preview()
 
-        if img.width > max_w or img.height > max_h:
-            if img_ratio > 1:
-                # Wider than tall
-                new_w = max_w
-                new_h = int(max_w / img_ratio)
-            else:
-                # Taller than wide
-                new_h = max_h
-                new_w = int(max_h * img_ratio)
-            img = img.resize((new_w, new_h), Image.NEAREST)
+    def show_image(self, img, title, row):
+        if title == "Original Image":
+            fig, ax = plt.subplots(figsize=(4, 4))  # smaller original
+        else:
+            fig, ax = plt.subplots(figsize=(8, 8))  # larger preview
 
-        fig, ax = plt.subplots(figsize=(5, 5))
         ax.imshow(img)
         ax.set_title(title)
         ax.axis("off")
 
         canvas = FigureCanvasTkAgg(fig, master=self.preview_frame)
         canvas.draw()
-        canvas.get_tk_widget().grid(row=row, column=0)
 
-        if row == 0:
+        col = 0 if title == "Original Image" else 1
+        canvas.get_tk_widget().grid(row=0, column=col, sticky="nsew")
+
+        if title == "Original Image":
             if self.original_canvas:
                 self.original_canvas.get_tk_widget().destroy()
             self.original_canvas = canvas
@@ -230,15 +304,6 @@ class CrossStitchApp:
                 self.processed_canvas.get_tk_widget().destroy()
             self.processed_canvas = canvas
 
-    def load_image(self):
-        img, path = open_image()
-        if img:
-            self.original_image = img
-            self.image_path = path
-            # Show original smaller (max 400x400)
-            self.show_image(img, title="Original Image", row=0, max_display_size=(400, 400))
-            self.update_preview()
-
     def update_preview(self):
         if not self.original_image:
             return
@@ -246,13 +311,22 @@ class CrossStitchApp:
         try:
             fabric_count = float(self.fabric_entry.get())
             inch_width = float(self.inch_width_entry.get())
-            inch_height = float(self.inch_height_entry.get())
 
-            if fabric_count <= 0 or inch_width <= 0 or inch_height <= 0:
+            if fabric_count <= 0 or inch_width <= 0:
                 raise ValueError
 
             width = int(fabric_count * inch_width)
-            height = int(fabric_count * inch_height)
+
+            if self.keep_aspect_var.get() and self.original_aspect_ratio:
+                height_inches = inch_width / self.original_aspect_ratio
+                height = int(fabric_count * height_inches)
+                self.inch_height_entry.delete(0, tk.END)
+                self.inch_height_entry.insert(0, f"{height_inches:.2f}")
+            else:
+                inch_height = float(self.inch_height_entry.get())
+                if inch_height <= 0:
+                    raise ValueError
+                height = int(fabric_count * inch_height)
         except ValueError:
             messagebox.showerror("Invalid Input", "Enter positive numbers for fabric count and dimensions.")
             return
@@ -269,8 +343,7 @@ class CrossStitchApp:
         self.latest_labels = labels
         self.latest_palette = palette
 
-        # Show processed bigger (max 600x600), without grid overlay or symbols
-        self.show_image(processed, title="Processed Preview", row=1, max_display_size=(600, 600))
+        self.show_image(processed.copy(), title="Processed Preview", row=1)
 
     def export_chart(self):
         if hasattr(self, 'latest_quantized') and hasattr(self, 'latest_labels') and hasattr(self, 'latest_palette'):
