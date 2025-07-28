@@ -1,21 +1,12 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jun 18 16:55:34 2025
-
-@author: ellie
-"""
-
 #--------------------------------------------------------------------------------
-#Cross Stitch Chart Generator
-#User selects image to be transformed into a cross stitch chart
-#User selects the number of colours to be used
-#User selects grid resolution
-#Sharpness and contrast can be adjusted
-#Output 1 is scaled vision of what the image will look like with corresponding colours
-#Output 2 is colour chart for cross stitch (needs to be big enough that instructions are visible)
+# CROSS STITCH CHART GENERATOR
+# User selects image to be transformed into a cross stitch chart
+# User specifies canvas size, canvas thread count, number of colours to be used
+# Image can be sharpened; contrast can be adjusted
+# PDF Output 1: Cross stitch chart
+# PDF Output 2: Colour key (specific to DMC thread colours)
 #--------------------------------------------------------------------------------
 
-import io
 import numpy as np
 from PIL import Image, ImageEnhance, ImageFilter, ImageDraw, ImageFont
 from sklearn.cluster import KMeans
@@ -25,7 +16,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
 import string
 
-# ---- Compact DMC palette (~60 colors) ----
+# DMC Colour Palette
 DMC_PALETTE = [
     {"code": "310", "name": "Black", "rgb": (0, 0, 0)},
     {"code": "321", "name": "Red", "rgb": (199, 43, 59)},
@@ -74,9 +65,9 @@ DMC_PALETTE = [
     {"code": "5200", "name": "Snow White", "rgb": (255, 255, 255)}
 ]
 
-
-def find_nearest_dmc_color(color_rgb):
-    color_array = np.array(color_rgb)
+#Match colours to DMC colours
+def find_nearest_dmc_colour(colour_rgb):
+    color_array = np.array(colour_rgb)
     distances = [np.linalg.norm(color_array - np.array(dmc["rgb"])) for dmc in DMC_PALETTE]
     return DMC_PALETTE[np.argmin(distances)]
 
@@ -88,27 +79,31 @@ def open_image():
         return Image.open(path).convert("RGB"), path
     return None, None
 
-
-def quantize_image(img, width, height, num_colors, contrast=1.5, sharpen=True):
+#Quantize image to reduce number of colours in cross stitch based on user-defined number of colours
+def quantize_image(img, width, height, num_colours, contrast=1.5, sharpen=True):
     enhancer = ImageEnhance.Contrast(img)
     img = enhancer.enhance(contrast)
 
+    #Sharpen image if user has selected this option
     if sharpen:
-        img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+        img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=100, threshold=0))
 
-    img = img.resize((width, height), Image.NEAREST)
+    #Store image as numpy array
+    img = img.resize((width, height), Image.Resampling.NEAREST)
     img_np = np.array(img)
     h, w, _ = img_np.shape
     flat_img = img_np.reshape(-1, 3)
 
-    kmeans = KMeans(n_clusters=num_colors, random_state=0).fit(flat_img)
+    #Use k-means clustering to find dominant colours
+    kmeans: KMeans = KMeans(n_clusters=num_colours, random_state=0)
+    kmeans.fit(flat_img)
     palette = kmeans.cluster_centers_.astype("uint8")
     labels = kmeans.labels_
 
     quantized_img = palette[labels].reshape(h, w, 3)
     return Image.fromarray(quantized_img), labels.reshape(h, w), palette
 
-
+# Overlay colour key symbols on each grid position
 def overlay_grid_symbols(image, labels, palette):
     draw = ImageDraw.Draw(image)
     h, w = labels.shape
@@ -133,7 +128,7 @@ def overlay_grid_symbols(image, labels, palette):
 
     return image
 
-
+# Create colour chart and colour key files
 def save_chart_with_legend(quant_img, labels, palette):
     symbols = list(string.ascii_letters + string.digits + string.punctuation)
     while len(symbols) < len(palette):
@@ -150,6 +145,17 @@ def save_chart_with_legend(quant_img, labels, palette):
     if not save_path:
         return
 
+    # Get canvas width in inches from user input (default to 4 if not accessible)
+    try:
+        inch_width = float(app.inch_width_entry.get())
+    except (ValueError, AttributeError):
+        inch_width = 4.0
+
+    # Adjust grid thickness and font size based on canvas size
+    grid_linewidth = 2 / inch_width
+    bold_grid_linewidth = 4 / inch_width
+    font_size = 24 / inch_width
+
     # Main chart
     fig, ax = plt.subplots(figsize=(10, 10))
     ax.imshow(quant_img)
@@ -159,12 +165,12 @@ def save_chart_with_legend(quant_img, labels, palette):
 
     ax.set_xticks(np.arange(-0.5, w, 1), minor=True)
     ax.set_yticks(np.arange(-0.5, h, 1), minor=True)
-    ax.grid(which='minor', color='lightgray', linestyle=':', linewidth=0.5)
+    ax.grid(which='minor', color='lightgray', linestyle=':', linewidth=grid_linewidth)
 
     for x in range(0, w + 1, 10):
-        ax.axvline(x - 0.5, color='black', linewidth=1)
+        ax.axvline(x - 0.5, color='black', linewidth=bold_grid_linewidth)
     for y in range(0, h + 1, 10):
-        ax.axhline(y - 0.5, color='black', linewidth=1)
+        ax.axhline(y - 0.5, color='black', linewidth=bold_grid_linewidth)
 
     for y in range(h):
         for x in range(w):
@@ -172,8 +178,8 @@ def save_chart_with_legend(quant_img, labels, palette):
             symbol = symbol_map[label]
             r, g, b = palette[label]
             brightness = (0.299 * r + 0.587 * g + 0.114 * b)
-            text_color = 'white' if brightness < 128 else 'black'
-            ax.text(x, y, symbol, fontsize=6, ha='center', va='center', color=text_color)
+            text_colour = 'white' if brightness < 128 else 'black'
+            ax.text(x, y, symbol, fontsize=font_size, ha='center', va='center', color=text_colour)
 
     ax.set_xticks([])
     ax.set_yticks([])
@@ -186,16 +192,15 @@ def save_chart_with_legend(quant_img, labels, palette):
     legend_fig, legend_ax = plt.subplots(figsize=(5, len(palette) * 0.4))
     legend_ax.axis('off')
 
-    for i, color in enumerate(palette):
-        patch_color = np.array(color) / 255
+    for i, colour in enumerate(palette):
+        patch_colour = np.array(colour) / 255
         symbol = symbol_map[i]
-        dmc = find_nearest_dmc_color(color)
-        y_pos = len(palette) - 1 - i  # flip to have first color at top
-        legend_ax.add_patch(plt.Rectangle((0.05, y_pos - 0.4), 0.3, 0.8, color=patch_color))
+        dmc = find_nearest_dmc_colour(colour)
+        y_pos = len(palette) - 1 - i
+        legend_ax.add_patch(plt.Rectangle((0.05, y_pos - 0.4), 0.3, 0.8, color=patch_colour))
         legend_ax.text(0.4, y_pos, f"{symbol}", fontsize=10, ha='left', va='center')
         legend_ax.text(0.5, y_pos, f"DMC {dmc['code']} ({dmc['name']})", fontsize=8, ha='left', va='center')
 
-    # Force limits so all colors show
     legend_ax.set_xlim(0, 1.2)
     legend_ax.set_ylim(-0.5, len(palette) - 0.5)
 
@@ -213,6 +218,23 @@ class CrossStitchApp:
         self.original_image = None
         self.image_path = None
         self.original_aspect_ratio = None
+
+        self.fabric_entry = None
+        self.keep_aspect_var = None
+        self.inch_width_entry = None
+        self.inch_height_entry = None
+        self.colour_slider = None
+        self.contrast_slider = None
+        self.sharpen_var = None
+
+        self.preview_frame = None
+        self.original_canvas = None
+        self.processed_canvas = None
+        self.palette_frame = None
+
+        self.latest_palette = None
+        self.latest_quantized = None
+        self.latest_labels = None
 
         self.setup_ui()
 
@@ -246,9 +268,9 @@ class CrossStitchApp:
         self.inch_height_entry.pack(fill="x")
 
         ttk.Label(control_frame, text="Number of Colours").pack(pady=10)
-        self.color_slider = tk.Scale(control_frame, from_=2, to=30, orient='horizontal')
-        self.color_slider.set(10)
-        self.color_slider.pack(fill="x")
+        self.colour_slider = tk.Scale(control_frame, from_=2, to=30, orient='horizontal')
+        self.colour_slider.set(10)
+        self.colour_slider.pack(fill="x")
 
         ttk.Label(control_frame, text="Contrast").pack()
         self.contrast_slider = tk.Scale(control_frame, from_=0.5, to=3.0, resolution=0.1, orient='horizontal')
@@ -304,6 +326,7 @@ class CrossStitchApp:
                 self.processed_canvas.get_tk_widget().destroy()
             self.processed_canvas = canvas
 
+    # Update preview button to implement any changes in user-defined parameters
     def update_preview(self):
         if not self.original_image:
             return
@@ -331,12 +354,12 @@ class CrossStitchApp:
             messagebox.showerror("Invalid Input", "Enter positive numbers for fabric count and dimensions.")
             return
 
-        colors = self.color_slider.get()
+        colours = self.colour_slider.get()
         contrast = self.contrast_slider.get()
         sharpen = self.sharpen_var.get()
 
         processed, labels, palette = quantize_image(
-            self.original_image, width, height, colors, contrast=contrast, sharpen=sharpen
+            self.original_image, width, height, colours, contrast=contrast, sharpen=sharpen
         )
 
         self.latest_quantized = processed
@@ -353,6 +376,6 @@ class CrossStitchApp:
 
 
 if __name__ == "__main__":
-    root = tk.Tk()
-    app = CrossStitchApp(root)
-    root.mainloop()
+    main_root = tk.Tk()
+    app = CrossStitchApp(main_root)
+    main_root.mainloop()
