@@ -17,15 +17,27 @@ Once you are happy with the settings, click 'Export Chart'.  You will have two o
 2. Colour key mapped to DMC threads
 
 ## Demo
-An example of 
-<img width="1193" height="622" alt="Screenshot 2025-07-28 183055" src="https://github.com/user-attachments/assets/78bc8cf4-29fd-4544-92c9-610a0614d761" />
 
-<img width="1194" height="626" alt="Screenshot 2025-07-28 185252" src="https://github.com/user-attachments/assets/0c4ca35c-55b6-487b-8b1f-77d0cefee95a" />
-test
+<p align="center">
+  <img src="Demo-Images/Pigeon-4in.png" width="1000"/>
+  <br>
+  <em>Figure 1: Example of image conversion to cross stitch image with 4in canvas width and 10 colours.</em>
+</p>
 
-<img width="1073" height="940" alt="Screenshot 2025-07-28 185502" src="https://github.com/user-attachments/assets/94df8336-f79c-4add-96c4-6419296470aa" />
-test
+<p align="center">
+  <img src="Demo-Images/Pigeon-8in.png" width="1000"/>
+  <br>
+  <em>Figure 2: Example of image conversion to cross stitch image with 8in canvas width and 6 colours.</em>
+</p>
 
-<img width="387" height="313" alt="Screenshot 2025-07-28 185623" src="https://github.com/user-attachments/assets/2fa4b3b0-c508-472a-9e01-acabdc2daadc" />
-test
+<p align="center">
+  <img src="Demo-Images/Pigeon-4in-chart.png" width="1000"/>
+  <br>
+  <em>Figure 3: Cross stitch chart generated from settings in figure 1.</em>
+</p>
 
+<p align="center">
+  <img src="Demo-Images/Pigeon-4in-key.png" width="500"/>
+  <br>
+  <em>Figure 4: Colour palette generated from settings in figure 1.</em>
+</p>
